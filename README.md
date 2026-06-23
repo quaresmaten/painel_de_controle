@@ -1,4 +1,4 @@
-# Painel de Controle Interno
+# Painel Logístico – Cia C/2º Gpt E
 
 App Next.js para controle operacional e orçamentário com MongoDB Atlas, Vercel, autenticação por e-mail/senha e aprovação manual de usuários.
 
@@ -38,7 +38,7 @@ db.users.updateOne(
 ## Módulos
 
 - Orçamento: Empenhos, RP, Notas de Crédito e Fornecedores.
-- Operacional: Viaturas, Pessoal, Necessidades/Reformas, Documentação e Atividades.
+- Operacional: Viaturas e Equipamentos, Pessoal, Necessidades/Reformas, Documentação e Atividades.
 - Administração: Aprovações de usuários.
 
 Usuários cadastrados entram como pendentes e só acessam dados depois da aprovação de um admin. O primeiro admin é destravado manualmente no banco.

@@ -17,6 +17,11 @@ const budgetItemSchema = new Schema(
 
 const maintenanceNeedSchema = new Schema(
   {
+    tipo: {
+      type: String,
+      enum: ["instalacao", "aquisicao"],
+      default: "instalacao"
+    },
     instalacao: { type: String, required: true, trim: true },
     ambiente: { type: String, trim: true },
     servicoSolicitado: { type: String, required: true, trim: true },
@@ -46,6 +51,7 @@ const maintenanceNeedSchema = new Schema(
 );
 
 maintenanceNeedSchema.index({ prioridade: 1 });
+maintenanceNeedSchema.index({ tipo: 1 });
 maintenanceNeedSchema.index({ situacao: 1 });
 
 export const MaintenanceNeed =

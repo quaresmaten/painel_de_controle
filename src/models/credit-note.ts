@@ -27,6 +27,10 @@ const creditNoteSchema = new Schema(
     observacoes: { type: String, trim: true },
     solicitarRecolhimento: { type: Boolean, default: false },
     emTela: { type: Boolean, default: false },
+    commitmentIds: {
+      type: [{ type: Schema.Types.ObjectId, ref: "Commitment" }],
+      default: []
+    },
     allocations: { type: [allocationSchema], default: [] },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" }
@@ -36,6 +40,7 @@ const creditNoteSchema = new Schema(
 
 creditNoteSchema.index({ numeroNC: 1 }, { unique: true });
 creditNoteSchema.index({ prazo: 1 });
+creditNoteSchema.index({ ug: 1 });
 
 export const CreditNote =
   mongoose.models.CreditNote || mongoose.model("CreditNote", creditNoteSchema);

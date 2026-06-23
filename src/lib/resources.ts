@@ -1,4 +1,4 @@
-import type { Model } from "mongoose";
+import { Types, type Model } from "mongoose";
 
 import {
   computeCommitmentFields,
@@ -29,7 +29,68 @@ export const resourceModels: Record<ResourceKey, Model<unknown>> = {
   activities: Activity
 };
 
-export function prepareResourceData({
+type CreditNoteRecord = Record<string, unknown> & {
+  _id?: unknown;
+  id?: unknown;
+  valorNC?: number | null;
+  saldoNC?: number | null;
+  commitmentIds?: unknown[];
+  allocations?: Array<{ valorNE?: number | null; valorLiquidado?: number | null }>;
+};
+
+function normalizeObjectIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value.map(String).filter((item) => Types.ObjectId.isValid(item));
+}
+
+async function sumCommitmentsByIds(ids: string[]) {
+  if (!ids.length) return 0;
+
+  const commitments = await Commitment.find({ _id: { $in: ids } })
+    .select("valorOperacao")
+    .lean<Array<{ valorOperacao?: number | null }>>();
+
+  return commitments.reduce((sum, item) => sum + Number(item.valorOperacao ?? 0), 0);
+}
+
+export async function hydrateCreditNotes<T extends CreditNoteRecord>(records: T[]) {
+  const allCommitmentIds = Array.from(
+    new Set(records.flatMap((record) => normalizeObjectIds(record.commitmentIds)))
+  );
+
+  const totalsByCommitmentId = new Map<string, number>();
+
+  if (allCommitmentIds.length) {
+    const commitments = await Commitment.find({ _id: { $in: allCommitmentIds } })
+      .select("valorOperacao")
+      .lean<Array<{ _id: unknown; valorOperacao?: number | null }>>();
+
+    for (const commitment of commitments) {
+      totalsByCommitmentId.set(String(commitment._id), Number(commitment.valorOperacao ?? 0));
+    }
+  }
+
+  return records.map((record) => {
+    const commitmentIds = normalizeObjectIds(record.commitmentIds);
+    const commitmentTotal = commitmentIds.length
+      ? commitmentIds.reduce((sum, id) => sum + (totalsByCommitmentId.get(id) ?? 0), 0)
+      : undefined;
+    const computed = computeCreditNoteFields({
+      valorNC: record.valorNC,
+      allocations: record.allocations,
+      commitmentTotal
+    });
+
+    return {
+      ...record,
+      saldoNC: computed.saldoNC,
+      allocations: computed.allocations ?? record.allocations
+    };
+  });
+}
+
+export async function prepareResourceData({
   resource,
   data,
   userId,
@@ -60,14 +121,24 @@ export function prepareResourceData({
   }
 
   if (resource === "credit-notes") {
+    const commitmentIds = normalizeObjectIds(next.commitmentIds);
+    const allocations = Array.isArray(next.allocations)
+      ? (next.allocations as Array<{ valorNE?: number | null; valorLiquidado?: number | null }>)
+      : Array.isArray(existing?.allocations)
+        ? (existing.allocations as Array<{ valorNE?: number | null; valorLiquidado?: number | null }>)
+        : undefined;
+    const commitmentTotal = commitmentIds.length
+      ? await sumCommitmentsByIds(commitmentIds)
+      : undefined;
+
+    next.commitmentIds = commitmentIds;
+
     Object.assign(
       next,
       computeCreditNoteFields({
         valorNC: next.valorNC as number | null | undefined,
-        allocations: next.allocations as Array<{
-          valorNE?: number | null;
-          valorLiquidado?: number | null;
-        }>
+        allocations,
+        commitmentTotal
       })
     );
   }

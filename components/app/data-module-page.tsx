@@ -1,7 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { Fragment, FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Edit,
+  Eye,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Trash2,
+  X
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +21,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { FieldConfig, ModuleConfig } from "@/src/lib/modules";
+import {
+  MILITARY_RANK_ORDER,
+  SERVICE_SCALE_OPTIONS,
+  UG_GROUP_LABELS,
+  UG_GROUP_ORDER,
+  VEHICLE_CATEGORY_LABELS,
+  VEHICLE_CATEGORY_ORDER,
+  type FieldConfig,
+  type ModuleConfig,
+  type SortConfig,
+  type SortMode
+} from "@/src/lib/modules";
 import { formatCurrency, formatDate, normalizeText, toDateInputValue } from "@/src/lib/utils";
 import type { ResourceKey } from "@/src/lib/validation";
 
@@ -19,11 +42,22 @@ type RecordData = {
 };
 
 type RelationData = Partial<Record<ResourceKey, RecordData[]>>;
+type SortState = Required<Pick<SortConfig, "field">> &
+  Pick<SortConfig, "direction" | "mode" | "tieBreakerField">;
+
+const naturalCollator = new Intl.Collator("pt-BR", {
+  numeric: true,
+  sensitivity: "base"
+});
 
 function collectRelations(fields: FieldConfig[], acc = new Set<ResourceKey>()) {
   for (const field of fields) {
     if ((field.type === "relation" || field.type === "multiRelation") && field.relation) {
       acc.add(field.relation);
+    }
+
+    if (field.suggestionSource) {
+      acc.add(field.suggestionSource.resource);
     }
 
     if (field.fields) collectRelations(field.fields, acc);
@@ -35,7 +69,7 @@ function collectRelations(fields: FieldConfig[], acc = new Set<ResourceKey>()) {
 function defaultValue(field: FieldConfig): unknown {
   if (field.type === "checkbox") return false;
   if (field.type === "items" || field.type === "multiRelation") return [];
-  if (field.type === "select") return field.options?.[0]?.value ?? "";
+  if (field.type === "select") return field.required ? "" : field.options?.[0]?.value ?? "";
   return "";
 }
 
@@ -102,13 +136,35 @@ function displayValue(value: unknown, type?: FieldConfig["type"]) {
 
 function statusTone(value: unknown) {
   const normalized = String(value ?? "");
-  if (["entregue", "respondido", "resolvida", "disponivel", "approved", "pronto"].includes(normalized)) {
+  if (["entregue", "respondido", "resolvida", "disponivel", "approved", "pronto", "sim"].includes(normalized)) {
     return "success" as const;
   }
-  if (["atrasado", "critica", "indisponivel", "rejected"].includes(normalized)) {
+  if (
+    [
+      "atrasado",
+      "critica",
+      "indisponivel",
+      "rejected",
+      "cancelar_empenho",
+      "dispensa_medica",
+      "encostado"
+    ].includes(normalized)
+  ) {
     return "danger" as const;
   }
-  if (["no_prazo", "pendente", "em_andamento", "alta", "missao", "pending"].includes(normalized)) {
+  if (
+    [
+      "no_prazo",
+      "pendente",
+      "em_andamento",
+      "alta",
+      "missao",
+      "missao_externa",
+      "pending",
+      "aguardando_fornecedor",
+      "adido"
+    ].includes(normalized)
+  ) {
     return "warning" as const;
   }
   return "muted" as const;
@@ -118,6 +174,8 @@ const valueLabels: Record<string, string> = {
   approved: "Aprovado",
   rejected: "Rejeitado",
   pending: "Pendente",
+  sim: "Sim",
+  nao: "Não",
   no_prazo: "No prazo",
   em_andamento: "Em andamento",
   disponivel: "Disponível",
@@ -125,7 +183,11 @@ const valueLabels: Record<string, string> = {
   critica: "Crítica",
   media: "Média",
   ferias: "Férias",
+  dispensa_medica: "Dispensa Médica",
+  encostado: "Encostado",
+  adido: "Adido",
   missao: "Missão",
+  missao_externa: "Missão Externa",
   pendente: "Pendente",
   respondido: "Respondido",
   atrasado: "Atrasado",
@@ -134,12 +196,182 @@ const valueLabels: Record<string, string> = {
   aberta: "Aberta",
   cancelada: "Cancelada",
   pronto: "Pronto",
-  outros: "Outros"
+  outros: "Outros",
+  aguardando_fornecedor: "Aguardando Fornecedor",
+  cancelar_empenho: "Cancelar Empenho",
+  instalacao: "Instalação",
+  aquisicao: "Aquisição",
+  viatura_administrativa: "Viatura Administrativa",
+  viatura_operacional: "Viatura Operacional",
+  equipamento: "Equipamento",
+  ...Object.fromEntries(SERVICE_SCALE_OPTIONS.map((item) => [item.value, item.label]))
 };
 
 function formatLabel(value: unknown) {
   const raw = String(value ?? "-");
   return valueLabels[raw] ?? raw.replace(/_/g, " ");
+}
+
+function getRankIndex(value: unknown) {
+  const index = MILITARY_RANK_ORDER.indexOf(String(value ?? ""));
+  return index === -1 ? MILITARY_RANK_ORDER.length + 1 : index;
+}
+
+function compareValues(a: unknown, b: unknown, mode: SortMode = "text") {
+  if (mode === "number") {
+    return Number(a ?? 0) - Number(b ?? 0);
+  }
+
+  if (mode === "date") {
+    const aTime = a ? new Date(String(a)).getTime() : 0;
+    const bTime = b ? new Date(String(b)).getTime() : 0;
+    return aTime - bTime;
+  }
+
+  if (mode === "militaryRank") {
+    return getRankIndex(a) - getRankIndex(b);
+  }
+
+  return naturalCollator.compare(String(a ?? ""), String(b ?? ""));
+}
+
+function fieldByName(config: ModuleConfig, name: string) {
+  return config.fields.find((field) => field.name === name);
+}
+
+function relationOptionLabel(field: FieldConfig, option: RecordData) {
+  if (field.relationDisplay === "commitment") {
+    const numeroNE = option.numeroNE ? `NE ${option.numeroNE}` : "NE sem número";
+    const numeroNC = option.numeroNC ? ` · NC ${option.numeroNC}` : "";
+    return `${numeroNE}${numeroNC} · ${formatCurrency(option.valorOperacao)}`;
+  }
+
+  if (field.relationDisplay === "personnel") {
+    const posto = option.postoGraduacao ? `${option.postoGraduacao} ` : "";
+    const pelotao = option.pelotao ? ` (${option.pelotao})` : "";
+    return `${posto}${option.nome ?? option.id}${pelotao}`;
+  }
+
+  if (field.relationDisplay === "vehicle") {
+    const identificacao = option.placaOuIdentificacao ? ` · ${option.placaOuIdentificacao}` : "";
+    return `${option.marcaModelo ?? option.id}${identificacao} · ${formatLabel(option.disponibilidade)}`;
+  }
+
+  return String(option[field.relationLabel ?? "id"] ?? option.id);
+}
+
+function getRelationRecord(field: FieldConfig | undefined, value: unknown, relations: RelationData) {
+  if (!field?.relation || !value) return null;
+  return (relations[field.relation] ?? []).find((item) => item.id === String(value)) ?? null;
+}
+
+function getDisplayText(
+  record: RecordData,
+  name: string,
+  type: FieldConfig["type"] | undefined,
+  config: ModuleConfig,
+  relations: RelationData
+) {
+  const field = fieldByName(config, name);
+  const value = record[name];
+
+  if (field?.type === "relation") {
+    const option = getRelationRecord(field, value, relations);
+    return option ? relationOptionLabel(field, option) : displayValue(value, type);
+  }
+
+  if (field?.type === "multiRelation" && field.relation) {
+    const ids = Array.isArray(value) ? value.map(String) : [];
+    const labels = (relations[field.relation] ?? [])
+      .filter((item) => ids.includes(item.id))
+      .map((item) => relationOptionLabel(field, item));
+
+    return labels.length ? labels.join(", ") : "-";
+  }
+
+  if (type === "select") return formatLabel(value);
+  return displayValue(value, type);
+}
+
+function groupRelationOptions(field: FieldConfig, options: RecordData[]) {
+  if (field.relationGroupBy === "ug") {
+    return groupOptions({
+      options,
+      field: "ug",
+      labels: UG_GROUP_LABELS,
+      order: UG_GROUP_ORDER,
+      fallbackLabel: "Outros",
+      sortField: "numeroNE"
+    });
+  }
+
+  if (field.relationGroupBy === "militaryRank") {
+    return groupOptions({
+      options,
+      field: "postoGraduacao",
+      order: MILITARY_RANK_ORDER,
+      fallbackLabel: "Sem posto/grad",
+      sortField: "nome",
+      rankGrouping: true
+    });
+  }
+
+  if (field.relationGroupBy === "vehicleCategory") {
+    return groupOptions({
+      options,
+      field: "categoria",
+      labels: VEHICLE_CATEGORY_LABELS,
+      order: VEHICLE_CATEGORY_ORDER,
+      fallbackLabel: "Sem categoria",
+      sortField: "marcaModelo"
+    });
+  }
+
+  return [{ key: "all", label: "", options }];
+}
+
+function groupOptions({
+  options,
+  field,
+  labels = {},
+  order,
+  fallbackLabel,
+  sortField,
+  rankGrouping
+}: {
+  options: RecordData[];
+  field: string;
+  labels?: Record<string, string>;
+  order?: string[];
+  fallbackLabel: string;
+  sortField: string;
+  rankGrouping?: boolean;
+}) {
+  const orderedKeys = order ?? [];
+  const knownKeys = new Set([...orderedKeys.filter((key) => key !== "__fallback"), ...Object.keys(labels)]);
+  const buckets = new Map<string, RecordData[]>();
+
+  for (const option of options) {
+    const rawKey = String(option[field] ?? "").trim();
+    const key = rawKey && (!knownKeys.size || knownKeys.has(rawKey)) ? rawKey : "__fallback";
+    buckets.set(key, [...(buckets.get(key) ?? []), option]);
+  }
+
+  const keys = Array.from(buckets.keys()).sort((a, b) => {
+    if (rankGrouping) return getRankIndex(a) - getRankIndex(b);
+    const aIndex = orderedKeys.indexOf(a);
+    const bIndex = orderedKeys.indexOf(b);
+    if (aIndex !== -1 || bIndex !== -1) {
+      return (aIndex === -1 ? orderedKeys.length : aIndex) - (bIndex === -1 ? orderedKeys.length : bIndex);
+    }
+    return naturalCollator.compare(a, b);
+  });
+
+  return keys.map((key) => ({
+    key,
+    label: key === "__fallback" ? fallbackLabel : labels[key] ?? key,
+    options: (buckets.get(key) ?? []).sort((a, b) => compareValues(a[sortField], b[sortField], "natural"))
+  }));
 }
 
 export function DataModulePage({
@@ -152,6 +384,8 @@ export function DataModulePage({
   const [records, setRecords] = useState<RecordData[]>([]);
   const [relations, setRelations] = useState<RelationData>({});
   const [query, setQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [sort, setSort] = useState<SortState | null>(config.defaultSort ?? null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -167,7 +401,10 @@ export function DataModulePage({
 
   async function loadRecords() {
     const response = await fetch(`/api/resources/${config.key}`, { cache: "no-store" });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setLoading(false);
+      return;
+    }
     const body = await response.json();
     setRecords(body.data ?? []);
     setLoading(false);
@@ -187,6 +424,9 @@ export function DataModulePage({
   }
 
   useEffect(() => {
+    setLoading(true);
+    setColumnFilters({});
+    setSort(config.defaultSort ?? null);
     loadRecords();
     loadRelations();
     const interval = window.setInterval(loadRecords, 30000);
@@ -195,13 +435,72 @@ export function DataModulePage({
   }, [config.key]);
 
   const filteredRecords = useMemo(() => {
-    if (!query.trim()) return records;
-    const needle = normalizeText(query);
+    const searchNeedle = normalizeText(query);
+    const activeFilters = Object.entries(columnFilters).filter(([, value]) => value.trim());
 
-    return records.filter((record) =>
-      config.searchFields.some((field) => normalizeText(String(record[field] ?? "")).includes(needle))
-    );
-  }, [config.searchFields, query, records]);
+    const filtered = records.filter((record) => {
+      const matchesSearch =
+        !searchNeedle ||
+        config.searchFields.some((field) =>
+          normalizeText(String(record[field] ?? "")).includes(searchNeedle)
+        );
+
+      if (!matchesSearch) return false;
+
+      return activeFilters.every(([field, value]) => {
+        const column = config.columns.find((item) => item.name === field);
+        const display = getDisplayText(record, field, column?.type, config, relations);
+        return normalizeText(display).includes(normalizeText(value));
+      });
+    });
+
+    if (!sort) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      const direction = sort.direction === "desc" ? -1 : 1;
+      const primary = compareValues(a[sort.field], b[sort.field], sort.mode);
+      if (primary !== 0) return primary * direction;
+
+      if (sort.tieBreakerField) {
+        return compareValues(a[sort.tieBreakerField], b[sort.tieBreakerField], "natural") * direction;
+      }
+
+      return 0;
+    });
+  }, [columnFilters, config, query, records, relations, sort]);
+
+  const groupedRecords = useMemo(() => {
+    if (!config.groupBy) {
+      return [{ key: "all", label: "", records: filteredRecords }];
+    }
+
+    const group = config.groupBy;
+    const orderedKeys = group.order ?? [];
+    const labels = group.labels ?? {};
+    const knownKeys = new Set([...orderedKeys.filter((key) => key !== "__fallback"), ...Object.keys(labels)]);
+    const buckets = new Map<string, RecordData[]>();
+
+    for (const record of filteredRecords) {
+      const rawKey = String(record[group.field] ?? "").trim();
+      const key = rawKey && (!knownKeys.size || knownKeys.has(rawKey)) ? rawKey : "__fallback";
+      buckets.set(key, [...(buckets.get(key) ?? []), record]);
+    }
+
+    const keys = Array.from(buckets.keys()).sort((a, b) => {
+      const aIndex = orderedKeys.indexOf(a);
+      const bIndex = orderedKeys.indexOf(b);
+      if (aIndex !== -1 || bIndex !== -1) {
+        return (aIndex === -1 ? orderedKeys.length : aIndex) - (bIndex === -1 ? orderedKeys.length : bIndex);
+      }
+      return naturalCollator.compare(a, b);
+    });
+
+    return keys.map((key) => ({
+      key,
+      label: key === "__fallback" ? group.fallbackLabel ?? "Outros" : labels[key] ?? key,
+      records: buckets.get(key) ?? []
+    }));
+  }, [config.groupBy, filteredRecords]);
 
   function openCreate() {
     setEditing(null);
@@ -250,6 +549,24 @@ export function DataModulePage({
     const rows = Array.isArray(formData[field.name]) ? [...(formData[field.name] as unknown[])] : [];
     rows.splice(index, 1);
     updateField(field.name, rows);
+  }
+
+  function toggleSort(column: ModuleConfig["columns"][number]) {
+    setSort((current) => {
+      if (current?.field !== column.name) {
+        return {
+          field: column.name,
+          direction: "asc",
+          mode: column.sortMode ?? (column.type === "date" ? "date" : column.type === "currency" || column.type === "number" ? "number" : "text")
+        };
+      }
+
+      if (current.direction === "asc") {
+        return { ...current, direction: "desc" };
+      }
+
+      return config.defaultSort ?? null;
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -381,69 +698,118 @@ export function DataModulePage({
 
       <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
               <tr>
                 {config.columns.map((column) => (
-                <th key={column.name} className="border-b px-4 py-3 font-semibold">
-                    {column.label}
+                  <th key={column.name} className="border-b px-4 py-3 font-semibold">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-1 text-left uppercase"
+                      onClick={() => toggleSort(column)}
+                    >
+                      <span>{column.label}</span>
+                      {sort?.field === column.name ? (
+                        sort.direction === "desc" ? (
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="h-3.5 w-3.5 opacity-50" />
+                      )}
+                    </button>
                   </th>
                 ))}
                 <th className="border-b px-4 py-3 text-right font-semibold">Ações</th>
               </tr>
+              <tr>
+                {config.columns.map((column) => (
+                  <th key={column.name} className="border-b px-4 py-2">
+                    <Input
+                      value={columnFilters[column.name] ?? ""}
+                      onChange={(event) =>
+                        setColumnFilters((current) => ({
+                          ...current,
+                          [column.name]: event.target.value
+                        }))
+                      }
+                      placeholder={`Filtrar ${column.label}`}
+                      className="h-8 min-w-28 bg-background text-xs font-normal normal-case"
+                    />
+                  </th>
+                ))}
+                <th className="border-b px-4 py-2" />
+              </tr>
             </thead>
             <tbody>
-              {filteredRecords.map((record) => (
-                <tr key={record.id} className="hover:bg-secondary/40">
-                  {config.columns.map((column) => (
-                    <td key={column.name} className="border-b px-4 py-3 align-top">
-                      {column.type === "select" ||
-                      ["statusEntrega", "situacao", "prioridade", "disponibilidade", "status"].includes(column.name) ? (
-                        <Badge tone={statusTone(record[column.name])}>
-                          {formatLabel(record[column.name])}
-                        </Badge>
-                      ) : (
-                        displayValue(record[column.name], column.type)
-                      )}
-                    </td>
+              {groupedRecords.map((group) => (
+                <Fragment key={group.key}>
+                  {config.groupBy && (
+                    <tr className="bg-secondary/50">
+                      <td className="border-b px-4 py-2 font-semibold" colSpan={config.columns.length + 1}>
+                        <div className="flex items-center gap-2">
+                          <span>{group.label}</span>
+                          <Badge tone="muted">{group.records.length}</Badge>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {group.records.map((record) => (
+                    <tr key={record.id} className="hover:bg-secondary/40">
+                      {config.columns.map((column) => (
+                        <td key={column.name} className="border-b px-4 py-3 align-top">
+                          {column.type === "select" ||
+                          ["statusEntrega", "situacao", "prioridade", "disponibilidade", "status"].includes(column.name) ? (
+                            <Badge tone={statusTone(record[column.name])}>
+                              {formatLabel(record[column.name])}
+                            </Badge>
+                          ) : (
+                            getDisplayText(record, column.name, column.type, config, relations)
+                          )}
+                        </td>
+                      ))}
+                      <td className="border-b px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setViewing(record)}
+                            aria-label="Ver"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {isAdmin && (
+                            <>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => openEdit(record)}
+                                aria-label="Editar"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deleteRecord(record)}
+                                aria-label="Excluir"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                  <td className="border-b px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setViewing(record)}
-                        aria-label="Ver"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {isAdmin && (
-                        <>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => openEdit(record)}
-                            aria-label="Editar"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => deleteRecord(record)}
-                            aria-label="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                </Fragment>
               ))}
+
               {!filteredRecords.length && (
                 <tr>
                   <td className="px-4 py-8 text-muted-foreground" colSpan={config.columns.length + 1}>
@@ -534,36 +900,49 @@ function FieldInput({
   if (field.type === "multiRelation" && field.relation) {
     const selected = Array.isArray(value) ? value.map(String) : [];
     const options = relations[field.relation] ?? [];
+    const groups = groupRelationOptions(field, options);
 
     return (
       <div className="lg:col-span-2">
         <Label>{field.label}</Label>
-        <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {options.map((option) => {
-            const optionValue = option.id;
-            const checked = selected.includes(optionValue);
-            const label = String(option[field.relationLabel ?? "id"] ?? option.id);
+        <div className="mt-2 space-y-3">
+          {groups.map((group) => (
+            <div key={group.key}>
+              {group.label && (
+                <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                  {group.label}
+                </p>
+              )}
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {group.options.map((option) => {
+                  const optionValue = option.id;
+                  const checked = selected.includes(optionValue);
+                  const label = relationOptionLabel(field, option);
 
-            return (
-              <label
-                key={optionValue}
-                className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => {
-                    if (event.target.checked) {
-                      onChange([...selected, optionValue]);
-                    } else {
-                      onChange(selected.filter((item) => item !== optionValue));
-                    }
-                  }}
-                />
-                <span className="truncate">{label}</span>
-              </label>
-            );
-          })}
+                  return (
+                    <label
+                      key={optionValue}
+                      className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          if (event.target.checked) {
+                            onChange([...selected, optionValue]);
+                          } else {
+                            onChange(selected.filter((item) => item !== optionValue));
+                          }
+                        }}
+                      />
+                      <span className="min-w-0 truncate">{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
           {!options.length && (
             <p className="text-sm text-muted-foreground">Nenhuma opção cadastrada.</p>
           )}
@@ -580,6 +959,17 @@ function FieldInput({
       </label>
     );
   }
+
+  const datalistId = `${field.name}-suggestions`;
+  const suggestions = field.suggestionSource
+    ? Array.from(
+        new Set(
+          (relations[field.suggestionSource.resource] ?? [])
+            .map((item) => String(item[field.suggestionSource?.field ?? ""] ?? "").trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => naturalCollator.compare(a, b))
+    : [];
 
   return (
     <div className={fullWidth ? "lg:col-span-2" : ""}>
@@ -602,6 +992,7 @@ function FieldInput({
             required={field.required}
             onChange={(event) => onChange(event.target.value)}
           >
+            {field.required && <option value="">Selecionar</option>}
             {(field.options ?? []).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -618,25 +1009,42 @@ function FieldInput({
             <option value="">Selecionar</option>
             {(relations[field.relation] ?? []).map((option) => (
               <option key={option.id} value={option.id}>
-                {String(option[field.relationLabel ?? "id"] ?? option.id)}
+                {relationOptionLabel(field, option)}
               </option>
             ))}
           </Select>
         ) : (
-          <Input
-            id={field.name}
-            value={
-              field.type === "date"
-                ? toDateInputValue(value)
-                : value === undefined || value === null
-                  ? ""
-                  : String(value)
-            }
-            type={field.type === "date" ? "date" : field.type === "number" || field.type === "currency" ? "number" : "text"}
-            step={field.type === "currency" ? "0.01" : field.type === "number" ? "any" : undefined}
-            required={field.required}
-            onChange={(event) => onChange(event.target.value)}
-          />
+          <>
+            <Input
+              id={field.name}
+              value={
+                field.type === "date"
+                  ? toDateInputValue(value)
+                  : value === undefined || value === null
+                    ? ""
+                    : String(value)
+              }
+              type={
+                field.type === "date"
+                  ? "date"
+                  : field.type === "number" || field.type === "currency"
+                    ? "number"
+                    : "text"
+              }
+              list={field.type === "combobox" && suggestions.length ? datalistId : undefined}
+              step={field.type === "currency" ? "0.01" : field.type === "number" ? "any" : undefined}
+              required={field.required}
+              placeholder={field.placeholder}
+              onChange={(event) => onChange(event.target.value)}
+            />
+            {field.type === "combobox" && suggestions.length > 0 && (
+              <datalist id={datalistId}>
+                {suggestions.map((item) => (
+                  <option key={item} value={item} />
+                ))}
+              </datalist>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -720,11 +1128,11 @@ function DetailValue({
     );
   }
 
-  let rendered = displayValue(value, field.type);
+  let rendered = field.type === "select" ? formatLabel(value) : displayValue(value, field.type);
 
   if (field.type === "relation" && field.relation && value) {
-    const option = (relations[field.relation] ?? []).find((item) => item.id === String(value));
-    rendered = String(option?.[field.relationLabel ?? "id"] ?? value);
+    const option = getRelationRecord(field, value, relations);
+    rendered = option ? relationOptionLabel(field, option) : String(value);
   }
 
   if (field.type === "multiRelation" && field.relation) {
@@ -732,7 +1140,7 @@ function DetailValue({
     rendered =
       (relations[field.relation] ?? [])
         .filter((item) => ids.includes(item.id))
-        .map((item) => String(item[field.relationLabel ?? "id"] ?? item.id))
+        .map((item) => relationOptionLabel(field, item))
         .join(", ") || "-";
   }
 

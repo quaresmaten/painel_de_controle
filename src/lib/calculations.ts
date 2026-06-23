@@ -59,18 +59,34 @@ export function computeCreditAllocation(allocation: {
 export function computeCreditNoteFields(input: {
   valorNC?: number | null;
   allocations?: Array<{ valorNE?: number | null; valorLiquidado?: number | null }>;
+  commitmentTotal?: number | null;
 }) {
   const valorNC = Number(input.valorNC ?? 0);
   const allocations = input.allocations ?? [];
-  const totalNE = allocations.reduce((sum, item) => sum + Number(item.valorNE ?? 0), 0);
+  const totalNE =
+    input.commitmentTotal === undefined || input.commitmentTotal === null
+      ? allocations.reduce((sum, item) => sum + Number(item.valorNE ?? 0), 0)
+      : Number(input.commitmentTotal ?? 0);
 
-  return {
-    saldoNC: valorNC - totalNE,
-    allocations: allocations.map((item) => ({
+  const computed: {
+    saldoNC: number;
+    allocations?: Array<{
+      valorNE?: number | null;
+      valorLiquidado?: number | null;
+      valorNaoLiquidado: number;
+    }>;
+  } = {
+    saldoNC: valorNC - totalNE
+  };
+
+  if (input.allocations) {
+    computed.allocations = allocations.map((item) => ({
       ...item,
       ...computeCreditAllocation(item)
-    }))
-  };
+    }));
+  }
+
+  return computed;
 }
 
 export function computeMaintenanceTotal(input: {

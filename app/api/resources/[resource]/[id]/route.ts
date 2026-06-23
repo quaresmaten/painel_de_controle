@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdminUser, requireApprovedUser } from "@/src/lib/auth";
 import { connectToDatabase } from "@/src/lib/mongodb";
-import { prepareResourceData, resourceModels } from "@/src/lib/resources";
+import { hydrateCreditNotes, prepareResourceData, resourceModels } from "@/src/lib/resources";
 import { serializeDoc } from "@/src/lib/serialize";
 import { isResourceKey, resourceSchemas } from "@/src/lib/validation";
 
@@ -47,7 +47,10 @@ export async function GET(_request: Request, { params }: Context) {
     return NextResponse.json({ message: "Registro não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: serializeDoc(record) });
+  const data =
+    valid.resource === "credit-notes" ? (await hydrateCreditNotes([record]))[0] : record;
+
+  return NextResponse.json({ data: serializeDoc(data) });
 }
 
 export async function PUT(request: Request, { params }: Context) {
@@ -78,7 +81,7 @@ export async function PUT(request: Request, { params }: Context) {
     );
   }
 
-  const payload = prepareResourceData({
+  const payload = await prepareResourceData({
     resource: valid.resource,
     data: parsed.data,
     userId: user.id,

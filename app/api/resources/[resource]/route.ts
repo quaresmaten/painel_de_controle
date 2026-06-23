@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdminUser, requireApprovedUser } from "@/src/lib/auth";
 import { connectToDatabase } from "@/src/lib/mongodb";
-import { prepareResourceData, resourceModels } from "@/src/lib/resources";
+import { hydrateCreditNotes, prepareResourceData, resourceModels } from "@/src/lib/resources";
 import { serializeDocs, serializeDoc } from "@/src/lib/serialize";
 import { isResourceKey, resourceSchemas } from "@/src/lib/validation";
 
@@ -30,8 +30,9 @@ export async function GET(_request: Request, { params }: Context) {
 
   const model = resourceModels[resource];
   const records = await model.find({}).sort({ updatedAt: -1 }).limit(500).lean();
+  const data = resource === "credit-notes" ? await hydrateCreditNotes(records) : records;
 
-  return NextResponse.json({ data: serializeDocs(records) });
+  return NextResponse.json({ data: serializeDocs(data) });
 }
 
 export async function POST(request: Request, { params }: Context) {
@@ -58,7 +59,7 @@ export async function POST(request: Request, { params }: Context) {
   }
 
   const model = resourceModels[resource];
-  const payload = prepareResourceData({
+  const payload = await prepareResourceData({
     resource,
     data: parsed.data,
     userId: user.id

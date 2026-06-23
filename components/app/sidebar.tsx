@@ -21,7 +21,7 @@ import {
 import { signOut } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
-import { navGroups, moduleConfigs } from "@/src/lib/modules";
+import { APP_NAME, navGroups, moduleConfigs } from "@/src/lib/modules";
 import { cn } from "@/src/lib/utils";
 import type { AppUser } from "@/src/lib/auth";
 
@@ -51,7 +51,7 @@ export function Sidebar({ user }: { user: AppUser }) {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase text-muted-foreground">Painel</p>
           <h1 className="mt-0.5 truncate text-lg font-semibold lg:mt-1">
-            Controle Interno
+            {APP_NAME}
           </h1>
         </div>
         <Button
@@ -78,7 +78,7 @@ export function Sidebar({ user }: { user: AppUser }) {
             )}
           >
             <LayoutDashboard className="h-4 w-4" />
-            Dashboard
+            Controle Geral
           </Link>
 
           {navGroups.map((group) => (

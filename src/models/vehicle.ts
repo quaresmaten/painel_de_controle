@@ -13,6 +13,10 @@ const vehicleHistorySchema = new Schema(
 
 const vehicleSchema = new Schema(
   {
+    categoria: {
+      type: String,
+      enum: ["viatura_administrativa", "viatura_operacional", "equipamento"]
+    },
     marcaModelo: { type: String, required: true, trim: true },
     placaOuIdentificacao: { type: String, trim: true },
     disponibilidade: {
@@ -33,6 +37,7 @@ const vehicleSchema = new Schema(
 );
 
 vehicleSchema.index({ disponibilidade: 1 });
+vehicleSchema.index({ categoria: 1 });
 vehicleSchema.index({ placaOuIdentificacao: 1 });
 
 export const Vehicle =

@@ -48,7 +48,17 @@ describe("calculos operacionais", () => {
     });
 
     expect(result.saldoNC).toBeCloseTo(1205.6);
-    expect(result.allocations[0].valorNaoLiquidado).toBeCloseTo(5994.4);
+    expect(result.allocations?.[0].valorNaoLiquidado).toBeCloseTo(5994.4);
+  });
+
+  it("calcula saldo de nota de credito usando empenhos vinculados", () => {
+    const result = computeCreditNoteFields({
+      valorNC: 7200,
+      allocations: [{ valorNE: 5994.4, valorLiquidado: 0 }],
+      commitmentTotal: 4200
+    });
+
+    expect(result.saldoNC).toBeCloseTo(3000);
   });
 
   it("soma o orcamento detalhado de necessidades", () => {

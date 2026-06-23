@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { APP_NAME } from "@/src/lib/modules";
 
 export function RegisterForm() {
   const [message, setMessage] = useState("");
@@ -44,7 +45,7 @@ export function RegisterForm() {
   return (
     <section className="w-full max-w-sm rounded-lg border bg-card p-6 shadow-sm">
       <p className="text-xs font-semibold uppercase text-muted-foreground">
-        Painel de Controle Interno
+        {APP_NAME}
       </p>
       <h1 className="mt-2 text-2xl font-semibold">Criar acesso</h1>
 

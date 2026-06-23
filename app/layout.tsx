@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Painel de Controle Interno",
+  title: "Painel Logístico – Cia C/2º Gpt E",
   description: "Painel interno para controle operacional e orçamentário"
 };
 

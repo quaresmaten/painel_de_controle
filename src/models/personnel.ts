@@ -6,9 +6,19 @@ const personnelSchema = new Schema(
     nome: { type: String, required: true, trim: true },
     pelotao: { type: String, trim: true },
     funcao: { type: String, trim: true },
+    escalaServico: { type: String, trim: true },
     situacao: {
       type: String,
-      enum: ["pronto", "ferias", "missao", "outros"],
+      enum: [
+        "pronto",
+        "ferias",
+        "dispensa_medica",
+        "encostado",
+        "adido",
+        "missao_externa",
+        "outros",
+        "missao"
+      ],
       default: "pronto",
       required: true
     },
@@ -21,6 +31,7 @@ const personnelSchema = new Schema(
 );
 
 personnelSchema.index({ nome: 1 });
+personnelSchema.index({ pelotao: 1 });
 personnelSchema.index({ situacao: 1 });
 
 export const Personnel =

@@ -10,7 +10,7 @@ const optionalString = z.preprocess(
   z.string().trim().optional()
 );
 
-const requiredString = z.string().trim().min(1, "Campo obrigatorio");
+const requiredString = z.string().trim().min(1, "Campo obrigatório");
 
 const optionalNumber = z.preprocess((value) => {
   if (value === "" || value === null || value === undefined) return undefined;
@@ -123,9 +123,11 @@ export const resourceSchemas = {
     observacoes: optionalString,
     solicitarRecolhimento: optionalBoolean.default(false),
     emTela: optionalBoolean.default(false),
-    allocations: z.array(allocationSchema).default([])
+    commitmentIds: z.array(z.string()).default([]),
+    allocations: z.array(allocationSchema).optional()
   }),
   "maintenance-needs": z.object({
+    tipo: z.enum(["instalacao", "aquisicao"]).default("instalacao"),
     instalacao: requiredString,
     ambiente: optionalString,
     servicoSolicitado: requiredString,
@@ -142,6 +144,7 @@ export const resourceSchemas = {
     totalOrcamento: optionalNumber.default(0)
   }),
   vehicles: z.object({
+    categoria: z.enum(["viatura_administrativa", "viatura_operacional", "equipamento"]).optional(),
     marcaModelo: requiredString,
     placaOuIdentificacao: optionalString,
     disponibilidade: z.enum(["disponivel", "indisponivel"]).default("disponivel"),
@@ -156,7 +159,19 @@ export const resourceSchemas = {
     nome: requiredString,
     pelotao: optionalString,
     funcao: optionalString,
-    situacao: z.enum(["pronto", "ferias", "missao", "outros"]).default("pronto"),
+    escalaServico: optionalString,
+    situacao: z
+      .enum([
+        "pronto",
+        "ferias",
+        "dispensa_medica",
+        "encostado",
+        "adido",
+        "missao_externa",
+        "outros",
+        "missao"
+      ])
+      .default("pronto"),
     destinoOuMissao: optionalString,
     observacoes: optionalString
   }),

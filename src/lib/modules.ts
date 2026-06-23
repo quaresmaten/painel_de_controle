@@ -10,7 +10,12 @@ export type FieldType =
   | "checkbox"
   | "relation"
   | "multiRelation"
+  | "combobox"
   | "items";
+
+export type SortMode = "text" | "number" | "date" | "natural" | "militaryRank";
+export type RelationDisplay = "default" | "commitment" | "personnel" | "vehicle";
+export type RelationGroup = "ug" | "militaryRank" | "vehicleCategory";
 
 export type FieldConfig = {
   name: string;
@@ -20,9 +25,26 @@ export type FieldConfig = {
   options?: Array<{ value: string; label: string }>;
   relation?: ResourceKey;
   relationLabel?: string;
+  relationDisplay?: RelationDisplay;
+  relationGroupBy?: RelationGroup;
+  suggestionSource?: { resource: ResourceKey; field: string };
   fields?: FieldConfig[];
   readOnly?: boolean;
   placeholder?: string;
+};
+
+export type GroupConfig = {
+  field: string;
+  labels?: Record<string, string>;
+  order?: string[];
+  fallbackLabel?: string;
+};
+
+export type SortConfig = {
+  field: string;
+  direction?: "asc" | "desc";
+  mode?: SortMode;
+  tieBreakerField?: string;
 };
 
 export type ModuleConfig = {
@@ -32,8 +54,111 @@ export type ModuleConfig = {
   group: "Orçamento" | "Operacional" | "Administração";
   href: string;
   searchFields: string[];
-  columns: Array<{ name: string; label: string; type?: FieldType }>;
+  columns: Array<{ name: string; label: string; type?: FieldType; sortMode?: SortMode }>;
   fields: FieldConfig[];
+  groupBy?: GroupConfig;
+  defaultSort?: SortConfig;
+};
+
+export const APP_NAME = "Painel Logístico – Cia C/2º Gpt E";
+
+export const YES_NO_OPTIONS = [
+  { value: "sim", label: "Sim" },
+  { value: "nao", label: "Não" }
+];
+
+export const UG_GROUP_LABELS: Record<string, string> = {
+  "167015": "UG 167015",
+  "160015": "UG 160015"
+};
+
+export const UG_GROUP_ORDER = ["167015", "160015", "__fallback"];
+
+export const VEHICLE_CATEGORY_OPTIONS = [
+  { value: "viatura_administrativa", label: "Viatura Administrativa" },
+  { value: "viatura_operacional", label: "Viatura Operacional" },
+  { value: "equipamento", label: "Equipamento" }
+];
+
+export const VEHICLE_CATEGORY_LABELS: Record<string, string> = {
+  viatura_administrativa: "Viatura Administrativa",
+  viatura_operacional: "Viatura Operacional",
+  equipamento: "Equipamento"
+};
+
+export const VEHICLE_CATEGORY_ORDER = [
+  "viatura_administrativa",
+  "viatura_operacional",
+  "equipamento",
+  "__fallback"
+];
+
+export const MAINTENANCE_TYPE_OPTIONS = [
+  { value: "instalacao", label: "Instalação" },
+  { value: "aquisicao", label: "Aquisição" }
+];
+
+export const MAINTENANCE_TYPE_LABELS: Record<string, string> = {
+  instalacao: "Instalação",
+  aquisicao: "Aquisição"
+};
+
+export const MILITARY_RANK_OPTIONS = [
+  { value: "Gen Ex", label: "Gen Ex" },
+  { value: "Gen Div", label: "Gen Div" },
+  { value: "Gen Bda", label: "Gen Bda" },
+  { value: "Cel", label: "Cel" },
+  { value: "TC", label: "TC" },
+  { value: "Maj", label: "Maj" },
+  { value: "Cap", label: "Cap" },
+  { value: "2º Ten", label: "2º Ten" },
+  { value: "1º Ten", label: "1º Ten" },
+  { value: "Asp Of", label: "Asp Of" },
+  { value: "ST", label: "ST" },
+  { value: "1º Sgt", label: "1º Sgt" },
+  { value: "2º Sgt", label: "2º Sgt" },
+  { value: "3º Sgt", label: "3º Sgt" },
+  { value: "Cb", label: "Cb" },
+  { value: "Sd", label: "Sd" },
+  { value: "Sd Rcr", label: "Sd Rcr" }
+];
+
+export const MILITARY_RANK_ORDER = MILITARY_RANK_OPTIONS.map((item) => item.value);
+
+export const PERSONNEL_STATUS_OPTIONS = [
+  { value: "pronto", label: "Pronto" },
+  { value: "ferias", label: "Férias" },
+  { value: "dispensa_medica", label: "Dispensa Médica" },
+  { value: "encostado", label: "Encostado" },
+  { value: "adido", label: "Adido" },
+  { value: "missao_externa", label: "Missão Externa" },
+  { value: "outros", label: "Outros" }
+];
+
+export const SERVICE_SCALE_OPTIONS = [
+  { value: "", label: "Sem escala" },
+  { value: "of_dia", label: "Oficial de dia" },
+  { value: "adj_dia", label: "Adjunto de dia" },
+  { value: "sgt_dia", label: "Sargento de dia" },
+  { value: "cmt_guarda", label: "Comandante da guarda" },
+  { value: "cmt_guarda_res", label: "Comandante da guarda reserva" },
+  { value: "cmt_pa_harpia", label: "Comandante do PA Harpia" },
+  { value: "cb_pa_harpia", label: "Cabo do PA Harpia" },
+  { value: "cb_guarda", label: "Cabo da guarda" },
+  { value: "cb_guarda_res", label: "Cabo da guarda reserva" },
+  { value: "cb_dia", label: "Cabo de dia" },
+  { value: "sentinela", label: "Sentinela" },
+  { value: "plantao", label: "Plantão" },
+  { value: "sentinela_res", label: "Sentinela reserva" },
+  { value: "motorista_de_dia", label: "Motorista de dia" },
+  { value: "motorista_sup_dia", label: "Motorista suplente de dia" }
+];
+
+const ugGroup: GroupConfig = {
+  field: "ug",
+  labels: UG_GROUP_LABELS,
+  order: UG_GROUP_ORDER,
+  fallbackLabel: "Outros"
 };
 
 export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
@@ -43,13 +168,14 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     navLabel: "Empenhos",
     group: "Orçamento",
     href: "/app/commitments",
-    searchFields: ["numeroNE", "numeroNC", "empresaTexto", "material", "descricao"],
+    searchFields: ["ug", "numeroNE", "numeroNC", "material", "descricao"],
     columns: [
-      { name: "numeroNE", label: "NE" },
-      { name: "numeroNC", label: "NC" },
-      { name: "dataEmissao", label: "Emissão", type: "date" },
-      { name: "prazoEntrega", label: "Prazo", type: "date" },
-      { name: "valorOperacao", label: "Valor", type: "currency" },
+      { name: "ug", label: "UG" },
+      { name: "numeroNE", label: "NE", sortMode: "natural" },
+      { name: "numeroNC", label: "NC", sortMode: "natural" },
+      { name: "dataEmissao", label: "Emissão", type: "date", sortMode: "date" },
+      { name: "prazoEntrega", label: "Prazo", type: "date", sortMode: "date" },
+      { name: "valorOperacao", label: "Valor", type: "currency", sortMode: "number" },
       { name: "statusEntrega", label: "Status", type: "select" }
     ],
     fields: [
@@ -58,15 +184,12 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
       { name: "numeroNC", label: "NC", type: "text" },
       { name: "pi", label: "PI", type: "text" },
       { name: "dataEmissao", label: "Data de emissão", type: "date" },
-      { name: "valorOperacao", label: "Valor operação", type: "currency" },
+      { name: "valorOperacao", label: "Valor da operação", type: "currency" },
       { name: "supplierId", label: "Fornecedor cadastrado", type: "relation", relation: "suppliers", relationLabel: "razaoSocial" },
-      { name: "empresaTexto", label: "Empresa texto", type: "text" },
       { name: "material", label: "Material", type: "text" },
-      { name: "formalizacao", label: "Formalização", type: "text" },
-      { name: "notaFiscal", label: "Nota fiscal", type: "text" },
-      { name: "liquidacao", label: "Liquidação", type: "text" },
-      { name: "situacao", label: "Situação", type: "text" },
-      { name: "motivo", label: "Motivo", type: "text" },
+      { name: "formalizacao", label: "Formalização", type: "select", options: YES_NO_OPTIONS },
+      { name: "notaFiscal", label: "Nota fiscal", type: "select", options: YES_NO_OPTIONS },
+      { name: "liquidacao", label: "Liquidação", type: "select", options: YES_NO_OPTIONS },
       {
         name: "statusEntrega",
         label: "Status da entrega",
@@ -78,7 +201,9 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
         ]
       },
       { name: "descricao", label: "Descrição", type: "textarea" }
-    ]
+    ],
+    groupBy: ugGroup,
+    defaultSort: { field: "numeroNE", direction: "asc", mode: "natural" }
   },
   payables: {
     key: "payables",
@@ -86,18 +211,17 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     navLabel: "RP",
     group: "Orçamento",
     href: "/app/payables",
-    searchFields: ["numeroNE", "empresaTexto", "material", "descricao", "status"],
+    searchFields: ["ug", "numeroNE", "material", "descricao", "status"],
     columns: [
-      { name: "numeroNE", label: "NE" },
-      { name: "dataEmissao", label: "Emissão", type: "date" },
-      { name: "valorALiquidar", label: "A liquidar", type: "currency" },
-      { name: "empresaTexto", label: "Empresa" },
+      { name: "ug", label: "UG" },
+      { name: "numeroNE", label: "NE", sortMode: "natural" },
+      { name: "dataEmissao", label: "Emissão", type: "date", sortMode: "date" },
+      { name: "valorALiquidar", label: "A liquidar", type: "currency", sortMode: "number" },
       { name: "material", label: "Material" },
-      { name: "status", label: "Status" }
+      { name: "status", label: "Status", type: "select" }
     ],
     fields: [
       { name: "ug", label: "UG", type: "text" },
-      { name: "cgcFex", label: "CGCFEx", type: "text" },
       { name: "pi", label: "PI", type: "text" },
       { name: "nd", label: "ND", type: "text" },
       { name: "numeroNE", label: "NE", type: "text", required: true },
@@ -105,14 +229,22 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
       { name: "dias", label: "Dias", type: "number" },
       { name: "valorALiquidar", label: "A liquidar", type: "currency" },
       { name: "supplierId", label: "Fornecedor cadastrado", type: "relation", relation: "suppliers", relationLabel: "razaoSocial" },
-      { name: "empresaTexto", label: "Empresa texto", type: "text" },
       { name: "material", label: "Material", type: "text" },
-      { name: "formalizacao", label: "Formalização", type: "text" },
-      { name: "liquidacao", label: "Liquidação", type: "text" },
-      { name: "situacao", label: "Situação", type: "text" },
-      { name: "status", label: "Status", type: "text" },
+      { name: "formalizacao", label: "Formalização", type: "select", options: YES_NO_OPTIONS },
+      { name: "liquidacao", label: "Liquidação", type: "select", options: YES_NO_OPTIONS },
+      {
+        name: "status",
+        label: "Status",
+        type: "select",
+        options: [
+          { value: "aguardando_fornecedor", label: "Aguardando Fornecedor" },
+          { value: "cancelar_empenho", label: "Cancelar Empenho" }
+        ]
+      },
       { name: "descricao", label: "Descrição", type: "textarea" }
-    ]
+    ],
+    groupBy: ugGroup,
+    defaultSort: { field: "numeroNE", direction: "asc", mode: "natural" }
   },
   "credit-notes": {
     key: "credit-notes",
@@ -120,13 +252,13 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     navLabel: "Notas de Crédito",
     group: "Orçamento",
     href: "/app/credit-notes",
-    searchFields: ["numeroNC", "objeto", "sugestao", "observacoes", "pi"],
+    searchFields: ["ug", "numeroNC", "objeto", "sugestao", "observacoes", "pi"],
     columns: [
-      { name: "numeroNC", label: "NC" },
-      { name: "prazo", label: "Prazo", type: "date" },
-      { name: "valorNC", label: "Valor NC", type: "currency" },
-      { name: "saldoNC", label: "Saldo", type: "currency" },
-      { name: "objeto", label: "Objeto" },
+      { name: "ug", label: "UG" },
+      { name: "numeroNC", label: "NC", sortMode: "natural" },
+      { name: "prazo", label: "Prazo", type: "date", sortMode: "date" },
+      { name: "valorNC", label: "Valor NC", type: "currency", sortMode: "number" },
+      { name: "saldoNC", label: "Saldo", type: "currency", sortMode: "number" },
       { name: "emTela", label: "Em tela", type: "checkbox" }
     ],
     fields: [
@@ -151,18 +283,16 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
       { name: "solicitarRecolhimento", label: "Solicitar recolhimento", type: "checkbox" },
       { name: "emTela", label: "Em tela", type: "checkbox" },
       {
-        name: "allocations",
-        label: "Requisições e empenhos",
-        type: "items",
-        fields: [
-          { name: "requisicao", label: "Requisição", type: "text" },
-          { name: "valorRequisicao", label: "Valor req", type: "currency" },
-          { name: "numeroNEGerada", label: "NE gerada", type: "text" },
-          { name: "valorNE", label: "Valor NE", type: "currency" },
-          { name: "valorLiquidado", label: "Liquidado", type: "currency" }
-        ]
+        name: "commitmentIds",
+        label: "Empenhos",
+        type: "multiRelation",
+        relation: "commitments",
+        relationDisplay: "commitment",
+        relationGroupBy: "ug"
       }
-    ]
+    ],
+    groupBy: ugGroup,
+    defaultSort: { field: "numeroNC", direction: "asc", mode: "natural" }
   },
   suppliers: {
     key: "suppliers",
@@ -196,16 +326,18 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     navLabel: "Necessidades",
     group: "Operacional",
     href: "/app/maintenance-needs",
-    searchFields: ["instalacao", "ambiente", "servicoSolicitado", "numeroNE", "ordemServico"],
+    searchFields: ["tipo", "instalacao", "ambiente", "servicoSolicitado", "numeroNE", "ordemServico"],
     columns: [
+      { name: "tipo", label: "Tipo", type: "select" },
       { name: "instalacao", label: "Instalação" },
       { name: "servicoSolicitado", label: "Serviço" },
-      { name: "prioridade", label: "Prioridade" },
-      { name: "situacao", label: "Situação" },
-      { name: "totalOrcamento", label: "Orçamento", type: "currency" }
+      { name: "prioridade", label: "Prioridade", type: "select" },
+      { name: "situacao", label: "Situação", type: "select" },
+      { name: "totalOrcamento", label: "Orçamento", type: "currency", sortMode: "number" }
     ],
     fields: [
-      { name: "instalacao", label: "Instalação", type: "text", required: true },
+      { name: "tipo", label: "Tipo", type: "select", options: MAINTENANCE_TYPE_OPTIONS },
+      { name: "instalacao", label: "Instalação/setor", type: "text", required: true },
       { name: "ambiente", label: "Ambiente", type: "text" },
       { name: "servicoSolicitado", label: "Serviço solicitado", type: "textarea", required: true },
       {
@@ -214,7 +346,7 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
         type: "select",
         options: [
           { value: "baixa", label: "Baixa" },
-          { value: "media", label: "Media" },
+          { value: "media", label: "Média" },
           { value: "alta", label: "Alta" },
           { value: "critica", label: "Crítica" }
         ]
@@ -253,24 +385,32 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
           { name: "percentual", label: "%", type: "number" }
         ]
       }
-    ]
+    ],
+    groupBy: {
+      field: "tipo",
+      labels: MAINTENANCE_TYPE_LABELS,
+      order: ["instalacao", "aquisicao", "__fallback"],
+      fallbackLabel: "Sem tipo"
+    }
   },
   vehicles: {
     key: "vehicles",
-    title: "Viaturas",
-    navLabel: "Viaturas",
+    title: "Viaturas e Equipamentos",
+    navLabel: "Viaturas e Equipamentos",
     group: "Operacional",
     href: "/app/vehicles",
-    searchFields: ["marcaModelo", "placaOuIdentificacao", "localAtual", "situacaoAtual"],
+    searchFields: ["categoria", "marcaModelo", "placaOuIdentificacao", "localAtual", "situacaoAtual"],
     columns: [
-      { name: "marcaModelo", label: "Marca/modelo" },
+      { name: "categoria", label: "Categoria", type: "select" },
+      { name: "marcaModelo", label: "Viatura/Equipamento" },
       { name: "placaOuIdentificacao", label: "Identificação" },
-      { name: "disponibilidade", label: "Disponibilidade" },
+      { name: "disponibilidade", label: "Disponibilidade", type: "select" },
       { name: "tipoPneu", label: "Pneu" },
       { name: "localAtual", label: "Local" }
     ],
     fields: [
-      { name: "marcaModelo", label: "Marca/modelo", type: "text", required: true },
+      { name: "categoria", label: "Categoria", type: "select", options: VEHICLE_CATEGORY_OPTIONS },
+      { name: "marcaModelo", label: "Viatura/Equipamento", type: "text", required: true },
       { name: "placaOuIdentificacao", label: "Placa/identificação", type: "text" },
       {
         name: "disponibilidade",
@@ -296,7 +436,14 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
           { name: "local", label: "Local", type: "text" }
         ]
       }
-    ]
+    ],
+    groupBy: {
+      field: "categoria",
+      labels: VEHICLE_CATEGORY_LABELS,
+      order: VEHICLE_CATEGORY_ORDER,
+      fallbackLabel: "Sem categoria"
+    },
+    defaultSort: { field: "marcaModelo", direction: "asc", mode: "natural" }
   },
   personnel: {
     key: "personnel",
@@ -304,33 +451,39 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     navLabel: "Pessoal",
     group: "Operacional",
     href: "/app/personnel",
-    searchFields: ["postoGraduacao", "nome", "pelotao", "funcao", "destinoOuMissao"],
+    searchFields: ["postoGraduacao", "nome", "pelotao", "funcao", "escalaServico"],
     columns: [
-      { name: "postoGraduacao", label: "Posto/grad" },
+      { name: "postoGraduacao", label: "Posto/grad", sortMode: "militaryRank" },
       { name: "nome", label: "Nome" },
       { name: "pelotao", label: "Pelotão" },
       { name: "funcao", label: "Função" },
-      { name: "situacao", label: "Situação" }
+      { name: "escalaServico", label: "Escala de Serviço", type: "select" },
+      { name: "situacao", label: "Situação", type: "select" }
     ],
     fields: [
-      { name: "postoGraduacao", label: "Posto/grad", type: "text", required: true },
+      { name: "postoGraduacao", label: "Posto/grad", type: "select", required: true, options: MILITARY_RANK_OPTIONS },
       { name: "nome", label: "Nome", type: "text", required: true },
-      { name: "pelotao", label: "Pelotão", type: "text" },
-      { name: "funcao", label: "Função", type: "text" },
       {
-        name: "situacao",
-        label: "Situação",
-        type: "select",
-        options: [
-          { value: "pronto", label: "Pronto" },
-          { value: "ferias", label: "Férias" },
-          { value: "missao", label: "Missão" },
-          { value: "outros", label: "Outros" }
-        ]
+        name: "pelotao",
+        label: "Pelotão",
+        type: "combobox",
+        suggestionSource: { resource: "personnel", field: "pelotao" }
       },
-      { name: "destinoOuMissao", label: "Destino/missão", type: "text" },
+      { name: "funcao", label: "Função", type: "text" },
+      { name: "escalaServico", label: "Escala de Serviço", type: "select", options: SERVICE_SCALE_OPTIONS },
+      { name: "situacao", label: "Situação", type: "select", options: PERSONNEL_STATUS_OPTIONS },
       { name: "observacoes", label: "Observações", type: "textarea" }
-    ]
+    ],
+    groupBy: {
+      field: "pelotao",
+      fallbackLabel: "Sem pelotão"
+    },
+    defaultSort: {
+      field: "postoGraduacao",
+      direction: "asc",
+      mode: "militaryRank",
+      tieBreakerField: "nome"
+    }
   },
   documents: {
     key: "documents",
@@ -341,10 +494,10 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     searchFields: ["numeroDiex", "numeroDiexResposta", "responsavel", "assunto"],
     columns: [
       { name: "numeroDiex", label: "DIEx" },
-      { name: "prazo", label: "Prazo", type: "date" },
+      { name: "prazo", label: "Prazo", type: "date", sortMode: "date" },
       { name: "responsavel", label: "Responsável" },
       { name: "numeroDiexResposta", label: "Resposta" },
-      { name: "situacao", label: "Situação" }
+      { name: "situacao", label: "Situação", type: "select" }
     ],
     fields: [
       { name: "numeroDiex", label: "Nº DIEx", type: "text", required: true },
@@ -374,18 +527,32 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     searchFields: ["nome", "responsavel", "descricao"],
     columns: [
       { name: "nome", label: "Atividade" },
-      { name: "data", label: "Data", type: "date" },
+      { name: "data", label: "Data", type: "date", sortMode: "date" },
       { name: "responsavel", label: "Responsável" },
       { name: "personnelIds", label: "Efetivo" },
-      { name: "vehicleIds", label: "Viaturas" }
+      { name: "vehicleIds", label: "Viaturas/Equipamentos" }
     ],
     fields: [
       { name: "nome", label: "Nome da atividade", type: "text", required: true },
       { name: "data", label: "Data", type: "date" },
       { name: "responsavel", label: "Responsável", type: "text" },
       { name: "descricao", label: "Descrição", type: "textarea" },
-      { name: "personnelIds", label: "Efetivo", type: "multiRelation", relation: "personnel", relationLabel: "nome" },
-      { name: "vehicleIds", label: "Viaturas", type: "multiRelation", relation: "vehicles", relationLabel: "marcaModelo" },
+      {
+        name: "personnelIds",
+        label: "Efetivo",
+        type: "multiRelation",
+        relation: "personnel",
+        relationDisplay: "personnel",
+        relationGroupBy: "militaryRank"
+      },
+      {
+        name: "vehicleIds",
+        label: "Viaturas/Equipamentos",
+        type: "multiRelation",
+        relation: "vehicles",
+        relationDisplay: "vehicle",
+        relationGroupBy: "vehicleCategory"
+      },
       { name: "observacoes", label: "Observações", type: "textarea" }
     ]
   }

@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 
 import { requireApprovedUser } from "@/src/lib/auth";
 import { connectToDatabase } from "@/src/lib/mongodb";
+import { hydrateCreditNotes } from "@/src/lib/resources";
 import { serializeDocs } from "@/src/lib/serialize";
+import { Activity } from "@/src/models/activity";
 import { Commitment } from "@/src/models/commitment";
 import { CreditNote } from "@/src/models/credit-note";
 import { ControlledDocument } from "@/src/models/document";
 import { MaintenanceNeed } from "@/src/models/maintenance-need";
+import { Personnel } from "@/src/models/personnel";
 import { Vehicle } from "@/src/models/vehicle";
 
 export const runtime = "nodejs";
@@ -26,11 +29,16 @@ export async function GET() {
 
   const [
     commitmentsByStatus,
-    creditNotes,
     maintenanceByPriority,
     documentsByStatus,
     urgentDocuments,
-    vehiclesByAvailability
+    vehiclesByAvailability,
+    vehiclesByCategoryAvailability,
+    creditNotesEmTela,
+    personnelReady,
+    documentsTotal,
+    activitiesTotal,
+    highNeeds
   ] = await Promise.all([
     Commitment.aggregate([
       {
@@ -41,11 +49,6 @@ export async function GET() {
         }
       }
     ]),
-    CreditNote.find({})
-      .select("numeroNC prazo prazoTipo valorNC saldoNC objeto emTela")
-      .sort({ prazo: 1 })
-      .limit(8)
-      .lean(),
     MaintenanceNeed.aggregate([
       {
         $group: {
@@ -78,17 +81,45 @@ export async function GET() {
           count: { $sum: 1 }
         }
       }
-    ])
+    ]),
+    Vehicle.aggregate([
+      {
+        $group: {
+          _id: {
+            categoria: { $ifNull: ["$categoria", "__fallback"] },
+            disponibilidade: "$disponibilidade"
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]),
+    CreditNote.find({ emTela: true })
+      .select("numeroNC valorNC saldoNC commitmentIds allocations emTela")
+      .lean(),
+    Personnel.countDocuments({ situacao: "pronto" }),
+    ControlledDocument.countDocuments({}),
+    Activity.countDocuments({}),
+    MaintenanceNeed.countDocuments({ prioridade: "alta" })
   ]);
+  const hydratedCreditNotes = await hydrateCreditNotes(creditNotesEmTela);
+  const saldoEmTela = hydratedCreditNotes.reduce(
+    (sum, item) => sum + Number(item.saldoNC ?? 0),
+    0
+  );
 
   return NextResponse.json({
     data: {
       commitmentsByStatus,
-      creditNotes: serializeDocs(creditNotes),
       maintenanceByPriority,
       documentsByStatus,
       urgentDocuments: serializeDocs(urgentDocuments),
-      vehiclesByAvailability
+      vehiclesByAvailability,
+      vehiclesByCategoryAvailability,
+      saldoEmTela,
+      personnelReady,
+      documentsTotal,
+      activitiesTotal,
+      highNeeds
     }
   });
 }

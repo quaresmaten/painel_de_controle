@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { APP_NAME } from "@/src/lib/modules";
 
 export function LoginForm() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export function LoginForm() {
   return (
     <section className="w-full max-w-sm rounded-lg border bg-card p-6 shadow-sm">
       <p className="text-xs font-semibold uppercase text-muted-foreground">
-        Painel de Controle Interno
+        {APP_NAME}
       </p>
       <h1 className="mt-2 text-2xl font-semibold">Entrar</h1>
 
