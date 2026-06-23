@@ -6,7 +6,7 @@ const personnelSchema = new Schema(
     nome: { type: String, required: true, trim: true },
     pelotao: { type: String, trim: true },
     funcao: { type: String, trim: true },
-    escalaServico: { type: String, trim: true },
+    escalaServico: { type: [{ type: String, trim: true }], default: [] },
     situacao: {
       type: String,
       enum: [

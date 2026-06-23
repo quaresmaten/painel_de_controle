@@ -10,6 +10,7 @@ export type FieldType =
   | "checkbox"
   | "relation"
   | "multiRelation"
+  | "multiSelect"
   | "combobox"
   | "items";
 
@@ -153,6 +154,8 @@ export const SERVICE_SCALE_OPTIONS = [
   { value: "motorista_de_dia", label: "Motorista de dia" },
   { value: "motorista_sup_dia", label: "Motorista suplente de dia" }
 ];
+
+export const SERVICE_SCALE_MULTI_OPTIONS = SERVICE_SCALE_OPTIONS.filter((item) => item.value);
 
 const ugGroup: GroupConfig = {
   field: "ug",
@@ -457,7 +460,7 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
       { name: "nome", label: "Nome" },
       { name: "pelotao", label: "Pelotão" },
       { name: "funcao", label: "Função" },
-      { name: "escalaServico", label: "Escala de Serviço", type: "select" },
+      { name: "escalaServico", label: "Escala de Serviço", type: "multiSelect" },
       { name: "situacao", label: "Situação", type: "select" }
     ],
     fields: [
@@ -470,7 +473,7 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
         suggestionSource: { resource: "personnel", field: "pelotao" }
       },
       { name: "funcao", label: "Função", type: "text" },
-      { name: "escalaServico", label: "Escala de Serviço", type: "select", options: SERVICE_SCALE_OPTIONS },
+      { name: "escalaServico", label: "Escala de Serviço", type: "multiSelect", options: SERVICE_SCALE_MULTI_OPTIONS },
       { name: "situacao", label: "Situação", type: "select", options: PERSONNEL_STATUS_OPTIONS },
       { name: "observacoes", label: "Observações", type: "textarea" }
     ],

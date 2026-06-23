@@ -5,6 +5,8 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
   Edit,
   Eye,
   Plus,
@@ -68,9 +70,15 @@ function collectRelations(fields: FieldConfig[], acc = new Set<ResourceKey>()) {
 
 function defaultValue(field: FieldConfig): unknown {
   if (field.type === "checkbox") return false;
-  if (field.type === "items" || field.type === "multiRelation") return [];
+  if (field.type === "items" || field.type === "multiRelation" || field.type === "multiSelect") return [];
   if (field.type === "select") return field.required ? "" : field.options?.[0]?.value ?? "";
   return "";
+}
+
+function toStringArray(value: unknown) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)];
 }
 
 function makeEmptyForm(fields: FieldConfig[]) {
@@ -106,8 +114,8 @@ function coerceValue(field: FieldConfig, value: unknown): unknown {
       );
   }
 
-  if (field.type === "multiRelation") {
-    return Array.isArray(value) ? value : [];
+  if (field.type === "multiRelation" || field.type === "multiSelect") {
+    return toStringArray(value);
   }
 
   if (field.type === "relation") {
@@ -212,6 +220,17 @@ function formatLabel(value: unknown) {
   return valueLabels[raw] ?? raw.replace(/_/g, " ");
 }
 
+function optionLabel(field: FieldConfig, value: unknown) {
+  const raw = String(value ?? "");
+  return field.options?.find((option) => option.value === raw)?.label ?? formatLabel(raw);
+}
+
+function formatMultiSelectValue(field: FieldConfig, value: unknown) {
+  const selected = toStringArray(value);
+  if (!selected.length) return "-";
+  return selected.map((item) => optionLabel(field, item)).join(", ");
+}
+
 function getRankIndex(value: unknown) {
   const index = MILITARY_RANK_ORDER.indexOf(String(value ?? ""));
   return index === -1 ? MILITARY_RANK_ORDER.length + 1 : index;
@@ -287,6 +306,10 @@ function getDisplayText(
       .map((item) => relationOptionLabel(field, item));
 
     return labels.length ? labels.join(", ") : "-";
+  }
+
+  if (field?.type === "multiSelect") {
+    return formatMultiSelectValue(field, value);
   }
 
   if (type === "select") return formatLabel(value);
@@ -385,6 +408,7 @@ export function DataModulePage({
   const [relations, setRelations] = useState<RelationData>({});
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortState | null>(config.defaultSort ?? null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -426,6 +450,7 @@ export function DataModulePage({
   useEffect(() => {
     setLoading(true);
     setColumnFilters({});
+    setCollapsedGroups(new Set());
     setSort(config.defaultSort ?? null);
     loadRecords();
     loadRelations();
@@ -525,6 +550,7 @@ export function DataModulePage({
     setShowForm(false);
     setEditing(null);
     setFormData(makeEmptyForm(config.fields));
+    setError("");
   }
 
   function updateField(name: string, value: unknown) {
@@ -566,6 +592,20 @@ export function DataModulePage({
       }
 
       return config.defaultSort ?? null;
+    });
+  }
+
+  function toggleGroup(groupKey: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+
+      return next;
     });
   }
 
@@ -651,39 +691,61 @@ export function DataModulePage({
       )}
 
       {showForm && isAdmin && (
-        <form className="mb-6 rounded-lg border bg-card p-4 shadow-sm" onSubmit={handleSubmit}>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold">{editing ? "Editar" : "Novo registro"}</h3>
-            <Button type="button" variant="ghost" size="icon" onClick={closeForm} aria-label="Fechar">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-background/70"
+            aria-label="Fechar formulário"
+            onClick={closeForm}
+          />
+          <form
+            className="absolute inset-y-0 right-0 flex w-full flex-col border-l bg-card shadow-xl sm:max-w-xl lg:max-w-2xl"
+            onSubmit={handleSubmit}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold uppercase text-muted-foreground">{config.title}</p>
+                <h3 className="text-base font-semibold">{editing ? "Editar registro" : "Novo registro"}</h3>
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={closeForm} aria-label="Fechar">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {config.fields.map((field) => (
-              <FieldInput
-                key={field.name}
-                field={field}
-                value={formData[field.name]}
-                relations={relations}
-                onChange={(value) => updateField(field.name, value)}
-                onItemChange={updateItem}
-                onItemAdd={addItem}
-                onItemRemove={removeItem}
-              />
-            ))}
-          </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {error && (
+                <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
 
-          <div className="mt-5 flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={closeForm}>
-              Cancelar
-            </Button>
-            <Button disabled={saving}>
-              <Save className="h-4 w-4" />
-              {saving ? "Salvando..." : "Salvar"}
-            </Button>
-          </div>
-        </form>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {config.fields.map((field) => (
+                  <FieldInput
+                    key={field.name}
+                    field={field}
+                    value={formData[field.name]}
+                    relations={relations}
+                    onChange={(value) => updateField(field.name, value)}
+                    onItemChange={updateItem}
+                    onItemAdd={addItem}
+                    onItemRemove={removeItem}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 justify-end gap-2 border-t p-4">
+              <Button type="button" variant="outline" onClick={closeForm}>
+                Cancelar
+              </Button>
+              <Button disabled={saving}>
+                <Save className="h-4 w-4" />
+                {saving ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+          </form>
+        </div>
       )}
 
       {viewing && (
@@ -743,72 +805,87 @@ export function DataModulePage({
               </tr>
             </thead>
             <tbody>
-              {groupedRecords.map((group) => (
-                <Fragment key={group.key}>
-                  {config.groupBy && (
-                    <tr className="bg-secondary/50">
-                      <td className="border-b px-4 py-2 font-semibold" colSpan={config.columns.length + 1}>
-                        <div className="flex items-center gap-2">
-                          <span>{group.label}</span>
-                          <Badge tone="muted">{group.records.length}</Badge>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+              {groupedRecords.map((group) => {
+                const isCollapsed = collapsedGroups.has(group.key);
 
-                  {group.records.map((record) => (
-                    <tr key={record.id} className="hover:bg-secondary/40">
-                      {config.columns.map((column) => (
-                        <td key={column.name} className="border-b px-4 py-3 align-top">
-                          {column.type === "select" ||
-                          ["statusEntrega", "situacao", "prioridade", "disponibilidade", "status"].includes(column.name) ? (
-                            <Badge tone={statusTone(record[column.name])}>
-                              {formatLabel(record[column.name])}
-                            </Badge>
-                          ) : (
-                            getDisplayText(record, column.name, column.type, config, relations)
-                          )}
-                        </td>
-                      ))}
-                      <td className="border-b px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button
+                return (
+                  <Fragment key={group.key}>
+                    {config.groupBy && (
+                      <tr className="bg-secondary/50">
+                        <td className="border-b p-0 font-semibold" colSpan={config.columns.length + 1}>
+                          <button
                             type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setViewing(record)}
-                            aria-label="Ver"
+                            className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-secondary"
+                            aria-expanded={!isCollapsed}
+                            onClick={() => toggleGroup(group.key)}
                           >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {isAdmin && (
-                            <>
+                            {isCollapsed ? (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span>{group.label}</span>
+                            <Badge tone="muted">{group.records.length}</Badge>
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+
+                    {!isCollapsed &&
+                      group.records.map((record) => (
+                        <tr key={record.id} className="hover:bg-secondary/40">
+                          {config.columns.map((column) => (
+                            <td key={column.name} className="border-b px-4 py-3 align-top">
+                              {column.type === "select" ||
+                              ["statusEntrega", "situacao", "prioridade", "disponibilidade", "status"].includes(column.name) ? (
+                                <Badge tone={statusTone(record[column.name])}>
+                                  {formatLabel(record[column.name])}
+                                </Badge>
+                              ) : (
+                                getDisplayText(record, column.name, column.type, config, relations)
+                              )}
+                            </td>
+                          ))}
+                          <td className="border-b px-4 py-3">
+                            <div className="flex justify-end gap-2">
                               <Button
                                 type="button"
                                 size="icon"
                                 variant="ghost"
-                                onClick={() => openEdit(record)}
-                                aria-label="Editar"
+                                onClick={() => setViewing(record)}
+                                aria-label="Ver"
                               >
-                                <Edit className="h-4 w-4" />
+                                <Eye className="h-4 w-4" />
                               </Button>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => deleteRecord(record)}
-                                aria-label="Excluir"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
+                              {isAdmin && (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => openEdit(record)}
+                                    aria-label="Editar"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => deleteRecord(record)}
+                                    aria-label="Excluir"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </Fragment>
+                );
+              })}
 
               {!filteredRecords.length && (
                 <tr>
@@ -842,7 +919,11 @@ function FieldInput({
   onItemAdd: (field: FieldConfig) => void;
   onItemRemove: (field: FieldConfig, index: number) => void;
 }) {
-  const fullWidth = field.type === "textarea" || field.type === "items" || field.type === "multiRelation";
+  const fullWidth =
+    field.type === "textarea" ||
+    field.type === "items" ||
+    field.type === "multiRelation" ||
+    field.type === "multiSelect";
 
   if (field.type === "items") {
     const rows = Array.isArray(value) ? value : [];
@@ -943,6 +1024,45 @@ function FieldInput({
             </div>
           ))}
 
+          {!options.length && (
+            <p className="text-sm text-muted-foreground">Nenhuma opção cadastrada.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === "multiSelect") {
+    const selected = toStringArray(value);
+    const options = (field.options ?? []).filter((option) => option.value);
+
+    return (
+      <div className="lg:col-span-2">
+        <Label>{field.label}</Label>
+        <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {options.map((option) => {
+            const checked = selected.includes(option.value);
+
+            return (
+              <label
+                key={option.value}
+                className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => {
+                    if (event.target.checked) {
+                      onChange([...selected, option.value]);
+                    } else {
+                      onChange(selected.filter((item) => item !== option.value));
+                    }
+                  }}
+                />
+                <span className="min-w-0 truncate">{option.label}</span>
+              </label>
+            );
+          })}
           {!options.length && (
             <p className="text-sm text-muted-foreground">Nenhuma opção cadastrada.</p>
           )}
@@ -1128,7 +1248,12 @@ function DetailValue({
     );
   }
 
-  let rendered = field.type === "select" ? formatLabel(value) : displayValue(value, field.type);
+  let rendered =
+    field.type === "select"
+      ? formatLabel(value)
+      : field.type === "multiSelect"
+        ? formatMultiSelectValue(field, value)
+        : displayValue(value, field.type);
 
   if (field.type === "relation" && field.relation && value) {
     const option = getRelationRecord(field, value, relations);

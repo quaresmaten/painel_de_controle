@@ -12,6 +12,16 @@ const optionalString = z.preprocess(
 
 const requiredString = z.string().trim().min(1, "Campo obrigatório");
 
+const optionalStringArray = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) return [];
+
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  return [String(value).trim()].filter(Boolean);
+}, z.array(z.string()).default([]));
+
 const optionalNumber = z.preprocess((value) => {
   if (value === "" || value === null || value === undefined) return undefined;
   const number = Number(value);
@@ -159,7 +169,7 @@ export const resourceSchemas = {
     nome: requiredString,
     pelotao: optionalString,
     funcao: optionalString,
-    escalaServico: optionalString,
+    escalaServico: optionalStringArray,
     situacao: z
       .enum([
         "pronto",
