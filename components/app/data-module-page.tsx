@@ -212,6 +212,7 @@ const valueLabels: Record<string, string> = {
   viatura_administrativa: "Viatura Administrativa",
   viatura_operacional: "Viatura Operacional",
   equipamento: "Equipamento",
+  cb_guarda_res: "Cabo da guarda reserva",
   ...Object.fromEntries(SERVICE_SCALE_OPTIONS.map((item) => [item.value, item.label]))
 };
 
@@ -229,6 +230,38 @@ function formatMultiSelectValue(field: FieldConfig, value: unknown) {
   const selected = toStringArray(value);
   if (!selected.length) return "-";
   return selected.map((item) => optionLabel(field, item)).join(", ");
+}
+
+function extractOptionValuesFromRecord(record: RecordData, fieldName: string) {
+  const value = record[fieldName];
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)];
+}
+
+function multiSelectOptions(field: FieldConfig, value: unknown, relations: RelationData) {
+  const options = new Map<string, string>();
+
+  for (const option of field.options ?? []) {
+    if (option.value) options.set(option.value, option.label);
+  }
+
+  if (field.suggestionSource) {
+    for (const record of relations[field.suggestionSource.resource] ?? []) {
+      for (const item of extractOptionValuesFromRecord(record, field.suggestionSource.field)) {
+        if (!options.has(item)) options.set(item, formatLabel(item));
+      }
+    }
+  }
+
+  for (const item of toStringArray(value)) {
+    if (!options.has(item)) options.set(item, formatLabel(item));
+  }
+
+  return Array.from(options, ([optionValue, label]) => ({
+    value: optionValue,
+    label
+  }));
 }
 
 function getRankIndex(value: unknown) {
@@ -466,9 +499,11 @@ export function DataModulePage({
     const filtered = records.filter((record) => {
       const matchesSearch =
         !searchNeedle ||
-        config.searchFields.some((field) =>
-          normalizeText(String(record[field] ?? "")).includes(searchNeedle)
-        );
+        config.searchFields.some((field) => {
+          const column = config.columns.find((item) => item.name === field);
+          const display = getDisplayText(record, field, column?.type, config, relations);
+          return normalizeText(display).includes(searchNeedle);
+        });
 
       if (!matchesSearch) return false;
 
@@ -634,6 +669,7 @@ export function DataModulePage({
 
     closeForm();
     await loadRecords();
+    await loadRelations();
   }
 
   async function deleteRecord(record: RecordData) {
@@ -924,6 +960,7 @@ function FieldInput({
     field.type === "items" ||
     field.type === "multiRelation" ||
     field.type === "multiSelect";
+  const [customOption, setCustomOption] = useState("");
 
   if (field.type === "items") {
     const rows = Array.isArray(value) ? value : [];
@@ -1034,37 +1071,70 @@ function FieldInput({
 
   if (field.type === "multiSelect") {
     const selected = toStringArray(value);
-    const options = (field.options ?? []).filter((option) => option.value);
+    const options = multiSelectOptions(field, value, relations);
+
+    function addCustomOption() {
+      const nextOption = customOption.trim();
+      if (!nextOption) return;
+
+      if (!selected.includes(nextOption)) {
+        onChange([...selected, nextOption]);
+      }
+
+      setCustomOption("");
+    }
 
     return (
       <div className="lg:col-span-2">
         <Label>{field.label}</Label>
-        <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {options.map((option) => {
-            const checked = selected.includes(option.value);
+        <div className="mt-2 space-y-3">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {options.map((option) => {
+              const checked = selected.includes(option.value);
 
-            return (
-              <label
-                key={option.value}
-                className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => {
-                    if (event.target.checked) {
-                      onChange([...selected, option.value]);
-                    } else {
-                      onChange(selected.filter((item) => item !== option.value));
-                    }
-                  }}
-                />
-                <span className="min-w-0 truncate">{option.label}</span>
-              </label>
-            );
-          })}
-          {!options.length && (
-            <p className="text-sm text-muted-foreground">Nenhuma opção cadastrada.</p>
+              return (
+                <label
+                  key={option.value}
+                  className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        onChange([...selected, option.value]);
+                      } else {
+                        onChange(selected.filter((item) => item !== option.value));
+                      }
+                    }}
+                  />
+                  <span className="min-w-0 truncate">{option.label}</span>
+                </label>
+              );
+            })}
+            {!options.length && (
+              <p className="text-sm text-muted-foreground">Nenhuma opção cadastrada.</p>
+            )}
+          </div>
+
+          {field.allowCustomOptions && (
+            <div className="flex flex-col gap-2 rounded-md border border-dashed p-3 sm:flex-row">
+              <Input
+                value={customOption}
+                onChange={(event) => setCustomOption(event.target.value)}
+                placeholder="Incluir nova escala"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCustomOption();
+                  }
+                }}
+              />
+              <Button type="button" variant="outline" onClick={addCustomOption}>
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -1185,32 +1255,45 @@ function DetailPanel({
   onEdit?: () => void;
 }) {
   return (
-    <section className="mb-6 rounded-lg border bg-card p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold">Detalhe</h3>
-        <div className="flex gap-2">
-          {onEdit && (
-            <Button type="button" variant="outline" onClick={onEdit}>
-              <Edit className="h-4 w-4" />
-              Editar
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-background/70"
+        aria-label="Fechar detalhe"
+        onClick={onClose}
+      />
+      <section className="absolute inset-y-0 right-0 flex w-full flex-col border-l bg-card shadow-xl sm:max-w-xl lg:max-w-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">{config.title}</p>
+            <h3 className="text-base font-semibold">Detalhe</h3>
+          </div>
+          <div className="flex gap-2">
+            {onEdit && (
+              <Button type="button" variant="outline" onClick={onEdit}>
+                <Edit className="h-4 w-4" />
+                Editar
+              </Button>
+            )}
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
+              <X className="h-4 w-4" />
             </Button>
-          )}
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
-            <X className="h-4 w-4" />
-          </Button>
+          </div>
         </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {config.fields.map((field) => (
-          <DetailValue
-            key={field.name}
-            field={field}
-            value={record[field.name]}
-            relations={relations}
-          />
-        ))}
-      </div>
-    </section>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {config.fields.map((field) => (
+              <DetailValue
+                key={field.name}
+                field={field}
+                value={record[field.name]}
+                relations={relations}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1243,6 +1326,37 @@ function DetailValue({
             </div>
           ))}
           {!rows.length && <p className="text-sm text-muted-foreground">-</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === "multiRelation" && field.relation && field.relationGroupBy) {
+    const ids = toStringArray(value);
+    const selectedOptions = (relations[field.relation] ?? []).filter((item) => ids.includes(item.id));
+    const groups = groupRelationOptions(field, selectedOptions);
+
+    return (
+      <div className="md:col-span-2">
+        <p className="text-xs font-semibold uppercase text-muted-foreground">{field.label}</p>
+        <div className="mt-2 space-y-3">
+          {groups.map((group) => (
+            <div key={group.key} className="rounded-md border p-3">
+              {group.label && (
+                <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                  {group.label}
+                </p>
+              )}
+              <ul className="space-y-1.5">
+                {group.options.map((item) => (
+                  <li key={item.id} className="text-sm">
+                    {relationOptionLabel(field, item)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {!selectedOptions.length && <p className="text-sm text-muted-foreground">-</p>}
         </div>
       </div>
     );

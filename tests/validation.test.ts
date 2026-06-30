@@ -26,4 +26,17 @@ describe("validacao de recursos", () => {
 
     expect(result.escalaServico).toEqual(["sentinela", "plantao"]);
   });
+
+  it("valida avaliacao, punicoes e dispensas de pessoal", () => {
+    const result = resourceSchemas.personnel.parse({
+      ...basePersonnel,
+      avaliacao: "MB",
+      punicoes: [{ data: "2026-06-01", motivo: "Atraso" }],
+      dispensas: [{ dataInicio: "2026-06-02", dataFim: "2026-06-03", motivo: "Dispensa concedida" }]
+    });
+
+    expect(result.avaliacao).toBe("MB");
+    expect(result.punicoes).toHaveLength(1);
+    expect(result.dispensas).toHaveLength(1);
+  });
 });

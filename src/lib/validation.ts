@@ -70,6 +70,24 @@ const vehicleHistorySchema = z.object({
   createdBy: idString
 });
 
+const personnelPunishmentSchema = z.object({
+  data: optionalDate,
+  motivo: optionalString,
+  observacoes: optionalString
+});
+
+const personnelLeaveSchema = z.object({
+  dataInicio: optionalDate,
+  dataFim: optionalDate,
+  motivo: optionalString,
+  observacoes: optionalString
+});
+
+const optionalEvaluation = z.preprocess(
+  emptyToUndefined,
+  z.enum(["E", "MB", "B", "R", "I"]).optional()
+);
+
 export const resourceSchemas = {
   suppliers: z.object({
     razaoSocial: requiredString,
@@ -170,6 +188,7 @@ export const resourceSchemas = {
     pelotao: optionalString,
     funcao: optionalString,
     escalaServico: optionalStringArray,
+    avaliacao: optionalEvaluation,
     situacao: z
       .enum([
         "pronto",
@@ -183,6 +202,8 @@ export const resourceSchemas = {
       ])
       .default("pronto"),
     destinoOuMissao: optionalString,
+    punicoes: z.array(personnelPunishmentSchema).default([]),
+    dispensas: z.array(personnelLeaveSchema).default([]),
     observacoes: optionalString
   }),
   documents: z.object({

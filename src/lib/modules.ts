@@ -29,6 +29,7 @@ export type FieldConfig = {
   relationDisplay?: RelationDisplay;
   relationGroupBy?: RelationGroup;
   suggestionSource?: { resource: ResourceKey; field: string };
+  allowCustomOptions?: boolean;
   fields?: FieldConfig[];
   readOnly?: boolean;
   placeholder?: string;
@@ -138,24 +139,35 @@ export const PERSONNEL_STATUS_OPTIONS = [
 
 export const SERVICE_SCALE_OPTIONS = [
   { value: "", label: "Sem escala" },
-  { value: "of_dia", label: "Oficial de dia" },
-  { value: "adj_dia", label: "Adjunto de dia" },
-  { value: "sgt_dia", label: "Sargento de dia" },
-  { value: "cmt_guarda", label: "Comandante da guarda" },
-  { value: "cmt_guarda_res", label: "Comandante da guarda reserva" },
-  { value: "cmt_pa_harpia", label: "Comandante do PA Harpia" },
-  { value: "cb_pa_harpia", label: "Cabo do PA Harpia" },
-  { value: "cb_guarda", label: "Cabo da guarda" },
-  { value: "cb_guarda_res", label: "Cabo da guarda reserva" },
-  { value: "cb_dia", label: "Cabo de dia" },
+  { value: "of_dia", label: "Oficial de Dia" },
+  { value: "adj_dia", label: "Adjunto Of Dia" },
+  { value: "sgt_dia", label: "Sargento de Dia" },
+  { value: "cmt_guarda", label: "Cmt da Guarda" },
+  { value: "cmt_guarda_res", label: "Cmt da Guarda da Residência" },
+  { value: "cmt_pa_harpia", label: "Cmt da PA Harpia" },
+  { value: "cb_guarda", label: "Cabo da Guarda" },
+  { value: "cb_pa_harpia", label: "Cabo da PA Harpia" },
+  { value: "cb_dia", label: "Cabo de Dia" },
   { value: "sentinela", label: "Sentinela" },
+  { value: "sentinela_res", label: "Sentinela da Residência" },
   { value: "plantao", label: "Plantão" },
-  { value: "sentinela_res", label: "Sentinela reserva" },
-  { value: "motorista_de_dia", label: "Motorista de dia" },
-  { value: "motorista_sup_dia", label: "Motorista suplente de dia" }
+  { value: "plantao_res", label: "Plantão da Reserva" },
+  { value: "motorista_de_dia", label: "Motorista de Dia" },
+  { value: "motorista_sup_dia", label: "Motorista do Superior de Dia" },
+  { value: "servico_hospital", label: "Serviço no Hospital" },
+  { value: "servico_rancho", label: "Serviço no Rancho" }
 ];
 
 export const SERVICE_SCALE_MULTI_OPTIONS = SERVICE_SCALE_OPTIONS.filter((item) => item.value);
+
+export const EVALUATION_OPTIONS = [
+  { value: "", label: "Sem avaliação" },
+  { value: "E", label: "E" },
+  { value: "MB", label: "MB" },
+  { value: "B", label: "B" },
+  { value: "R", label: "R" },
+  { value: "I", label: "I" }
+];
 
 const ugGroup: GroupConfig = {
   field: "ug",
@@ -454,13 +466,14 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
     navLabel: "Pessoal",
     group: "Operacional",
     href: "/app/personnel",
-    searchFields: ["postoGraduacao", "nome", "pelotao", "funcao", "escalaServico"],
+    searchFields: ["postoGraduacao", "nome", "pelotao", "funcao", "escalaServico", "avaliacao"],
     columns: [
       { name: "postoGraduacao", label: "Posto/grad", sortMode: "militaryRank" },
       { name: "nome", label: "Nome" },
       { name: "pelotao", label: "Pelotão" },
       { name: "funcao", label: "Função" },
       { name: "escalaServico", label: "Escala de Serviço", type: "multiSelect" },
+      { name: "avaliacao", label: "Avaliação", type: "select" },
       { name: "situacao", label: "Situação", type: "select" }
     ],
     fields: [
@@ -473,8 +486,37 @@ export const moduleConfigs: Record<ResourceKey, ModuleConfig> = {
         suggestionSource: { resource: "personnel", field: "pelotao" }
       },
       { name: "funcao", label: "Função", type: "text" },
-      { name: "escalaServico", label: "Escala de Serviço", type: "multiSelect", options: SERVICE_SCALE_MULTI_OPTIONS },
+      {
+        name: "escalaServico",
+        label: "Escala de Serviço",
+        type: "multiSelect",
+        options: SERVICE_SCALE_MULTI_OPTIONS,
+        suggestionSource: { resource: "personnel", field: "escalaServico" },
+        allowCustomOptions: true
+      },
+      { name: "avaliacao", label: "Avaliação", type: "select", options: EVALUATION_OPTIONS },
       { name: "situacao", label: "Situação", type: "select", options: PERSONNEL_STATUS_OPTIONS },
+      {
+        name: "punicoes",
+        label: "Punições",
+        type: "items",
+        fields: [
+          { name: "data", label: "Data", type: "date" },
+          { name: "motivo", label: "Motivo", type: "textarea" },
+          { name: "observacoes", label: "Observações", type: "textarea" }
+        ]
+      },
+      {
+        name: "dispensas",
+        label: "Dispensas concedidas",
+        type: "items",
+        fields: [
+          { name: "dataInicio", label: "Data início", type: "date" },
+          { name: "dataFim", label: "Data fim", type: "date" },
+          { name: "motivo", label: "Motivo", type: "textarea" },
+          { name: "observacoes", label: "Observações", type: "textarea" }
+        ]
+      },
       { name: "observacoes", label: "Observações", type: "textarea" }
     ],
     groupBy: {

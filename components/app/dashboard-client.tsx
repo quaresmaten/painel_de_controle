@@ -34,12 +34,22 @@ type VehicleCategoryAggregate = {
   count: number;
 };
 
+type PersonnelBreakdown = {
+  key: string;
+  label: string;
+  ready: number;
+  other: number;
+  total: number;
+};
+
 type DashboardData = {
   commitmentsByStatus: Aggregate[];
   maintenanceByPriority: Aggregate[];
   documentsByStatus: Aggregate[];
   vehiclesByAvailability: Aggregate[];
   vehiclesByCategoryAvailability: VehicleCategoryAggregate[];
+  personnelByScale: PersonnelBreakdown[];
+  personnelByRank: PersonnelBreakdown[];
   saldoEmTela: number;
   personnelReady: number;
   documentsTotal: number;
@@ -53,6 +63,8 @@ const emptyData: DashboardData = {
   documentsByStatus: [],
   vehiclesByAvailability: [],
   vehiclesByCategoryAvailability: [],
+  personnelByScale: [],
+  personnelByRank: [],
   saldoEmTela: 0,
   personnelReady: 0,
   documentsTotal: 0,
@@ -175,6 +187,55 @@ function GroupedVehicleBars({ data }: { data: DashboardData }) {
           </div>
         ))}
         {!categories.length && <p className="text-sm text-muted-foreground">Sem dados cadastrados.</p>}
+      </div>
+    </div>
+  );
+}
+
+function PersonnelStatusBars({
+  title,
+  rows
+}: {
+  title: string;
+  rows: PersonnelBreakdown[];
+}) {
+  const max = Math.max(1, ...rows.map((row) => Math.max(row.ready, row.other)));
+
+  return (
+    <div className="rounded-lg border bg-card p-4 shadow-sm">
+      <h3 className="text-base font-semibold">{title}</h3>
+      <div className="mt-5 space-y-5">
+        {rows.map((row) => (
+          <div key={row.key}>
+            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium">{row.label}</span>
+              <span className="text-muted-foreground">{row.total} total</span>
+            </div>
+            <div className="grid gap-2">
+              <div className="grid grid-cols-[8rem_1fr_2rem] items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Prontos</span>
+                <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-emerald-600"
+                    style={{ width: `${Math.max(4, (row.ready / max) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-right">{row.ready}</span>
+              </div>
+              <div className="grid grid-cols-[8rem_1fr_2rem] items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Situações div.</span>
+                <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-amber-500"
+                    style={{ width: `${Math.max(4, (row.other / max) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-right">{row.other}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+        {!rows.length && <p className="text-sm text-muted-foreground">Sem dados cadastrados.</p>}
       </div>
     </div>
   );
@@ -320,6 +381,8 @@ export function DashboardClient() {
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
         <BarChart title="Empenhos por status" rows={commitmentRows} />
         <GroupedVehicleBars data={data} />
+        <PersonnelStatusBars title="Militares por escala de serviço" rows={data.personnelByScale} />
+        <PersonnelStatusBars title="Militares por posto/graduação" rows={data.personnelByRank} />
       </section>
     </div>
   );
