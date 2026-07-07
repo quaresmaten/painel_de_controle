@@ -7,6 +7,7 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
+  Download,
   Edit,
   Eye,
   Plus,
@@ -349,6 +350,22 @@ function getDisplayText(
   return displayValue(value, type);
 }
 
+function csvEscape(value: unknown) {
+  const text = String(value ?? "");
+  const escaped = text.replace(/"/g, '""');
+  return /[";\n\r]/.test(escaped) ? `"${escaped}"` : escaped;
+}
+
+function slugify(value: string) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function todayFileDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function groupRelationOptions(field: FieldConfig, options: RecordData[]) {
   if (field.relationGroupBy === "ug") {
     return groupOptions({
@@ -689,6 +706,36 @@ export function DataModulePage({
     await loadRecords();
   }
 
+  function exportCsv() {
+    const header = config.columns.map((column) => column.label);
+    const rows: string[][] = [header];
+
+    for (const group of groupedRecords) {
+      if (config.groupBy) {
+        rows.push([`${group.label} (${group.records.length})`, ...Array(config.columns.length - 1).fill("")]);
+      }
+
+      for (const record of group.records) {
+        rows.push(
+          config.columns.map((column) =>
+            getDisplayText(record, column.name, column.type, config, relations)
+          )
+        );
+      }
+    }
+
+    const csv = `\uFEFF${rows.map((row) => row.map(csvEscape).join(";")).join("\r\n")}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `painel-logistico-${slugify(config.navLabel || config.title)}-${todayFileDate()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -697,6 +744,10 @@ export function DataModulePage({
           <h2 className="mt-1 text-2xl font-semibold">{config.title}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" onClick={exportCsv} disabled={!filteredRecords.length}>
+            <Download className="h-4 w-4" />
+            Exportar
+          </Button>
           <Button type="button" variant="outline" onClick={loadRecords}>
             <RefreshCw className="h-4 w-4" />
             Atualizar
